@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LINE LIFF GPS</title>
+  <script src="https://static.line-scdn.net/liff/edge/versions/2.1.13/sdk.js"></script>
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      text-align: center;
+      margin: 0;
+      background: #f4f7f9; /* Changed background color */
+      color: #333;
+    }
+    h1 {
+      font-size: 2.5em;
+      margin-top: 20px;
+      color: #333;
+    }
+    nav {
+      margin: 20px 0;
+    }
+    button {
+      padding: 15px 30px;
+      font-size: 1.2em;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background: #007bff; /* Button color */
+      color: #fff;
+      transition: background 0.3s, color 0.3s;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    input[type="text"], input[type="datetime-local"] {
+      padding: 12px;
+      font-size: 1em;
+      width: 80%;
+      max-width: 500px;
+      margin: 10px auto;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    #result, #resultLeave {
+      margin-top: 20px;
+      font-size: 1.2em;
+    }
+    #result {
+      color: #ff4d4d;
+    }
+    .tab {
+      display: none;
+    }
+    .active {
+      display: block;
+    }
+    .nav-container {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Finetek 泛皓工作管理系統</h1>
+  <nav class="nav-container">
+    <button onclick="showTab('checkin')">打卡系统</button>
+    <button onclick="showTab('leave')">請假系統</button>
+  </nav>
+
+  <!-- Check-in System -->
+  <div id="checkin" class="tab active">
+    <input type="text" id="userNameInput" placeholder="用户名" readonly>
+    <br>
+    <input type="text" id="taskInput" placeholder="今日工作事项">
+    <br>
+    <button onclick="handleCheckIn()">打卡</button>
+    <div id="result"></div>
+  </div>
+
+  <!-- Leave Request System -->
+  <div id="leave" class="tab">
+    <label for="startTimeInput">請假開始時間:</label>
+    <input type="datetime-local" id="startTimeInput">
+    <br>
+    <label for="endTimeInput">請假結束時間:</label>
+    <input type="datetime-local" id="endTimeInput">
+    <br>
+    <label for="reasonInput">請假原因填寫:</label>
+    <input type="text" id="reasonInput" placeholder="請輸入請假原因">
+    <br>
+    <button onclick="handleLeaveRequest()">提出申請</button>
+    <div id="resultLeave"></div>
+  </div>
+
+  <script>
+    let latitude = null;
+    let longitude = null;
+
+    window.onload = function() {
+      console.log('Window loaded');
+      
+      liff.init({ liffId: "2006203502-yg8v7Okk" }, () => {
+        console.log('LIFF initialized successfully');
+
+        if (!liff.isLoggedIn()) {
+          console.log('User is not logged in. Redirecting to login page...');
+          liff.login();
+        } else {
+          console.log('User is already logged in.');
+          liff.getProfile()
+            .then(profile => {
+              console.log('Profile retrieved:', profile);
+              document.getElementById('userNameInput').value = profile.displayName;
+            })
+            .catch(error => {
+              console.error('Error getting profile:', error);
+              document.getElementById('result').innerText = '获取用户信息失败';
+            });
+        }
+      }, err => {
+        console.error('LIFF initialization failed:', err);
+        document.getElementById('result').innerText = '初始化失败，请检查控制台日志。';
+      });
+    };
+
+    function handleCheckIn() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            latitude = position.coords.latitude;
+            longitude = position.coords.longitude;
+            submitTask();
+          },
+          showError
+        );
+      } else {
+        document.getElementById('result').innerText = "Geolocation is not supported by this browser.";
+      }
+    }
+
+    async function submitTask() {
+  const task = document.getElementById('taskInput').value;
+  const userName = document.getElementById('userNameInput').value;
+
+  if (task && userName) {
+    if (latitude !== null && longitude !== null) {
+      try {
+        document.getElementById('result').innerText = `打卡成功 ${latitude}`;
+
+        // 调用 Google Apps Script Web 应用的 URL
+        const response = await fetch('https://script.google.com/macros/s/AKfycbzUikpLYOUWF7sukNlBNDhMc6-sH0yuiEbPMQ8McH6oSH9jeeaxRlkYutS-p1C5bTYiuQ/exec', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            task: task,
+            latitude: latitude,
+            longitude: longitude,
+            userName: userName
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('网络响应不是 OK');
+        }
+        const result = await response.json();
+        document.getElementById('result').innerText = `服务端返回: ${result.message}`;
+      } catch (error) {
+        document.getElementById('result').innerText = `请求失败: ${error.message}`;
+        console.error('Error:', error);
+      }
+    } else {
+      document.getElementById('result').innerText = "未能获取位置";
+    }
+  } else {
+    document.getElementById('result').innerText = "请输工作事项";
+  }
+}
+
+
+    function handleLeaveRequest() {
+      const startTime = document.getElementById('startTimeInput').value;
+      const endTime = document.getElementById('endTimeInput').value;
+      const reason = document.getElementById('reasonInput').value;
+
+      if (startTime && endTime && reason) {
+        try {
+          document.getElementById('resultLeave').innerText = 
+            `請假時間: 從 ${startTime} 到 ${endTime}, 請假事由: ${reason}`;
+          google.script.run.saveLeaveRequest(startTime, endTime, reason);
+        } catch (error) {
+          document.getElementById('resultLeave').innerText = `申請失敗: ${error.message}`;
+          console.error('Error submitting leave request:', error);
+        }
+      } else {
+        document.getElementById('resultLeave').innerText = "請輸入所有請假理由";
+      }
+    }
+
+    function showError(error) {
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          document.getElementById('result').innerText = "用户拒绝请求地理位置权限。";
+          break;
+        case error.POSITION_UNAVAILABLE:
+          document.getElementById('result').innerText = "位置信息不可用。";
+          break;
+        case error.TIMEOUT:
+          document.getElementById('result').innerText = "请求获取用户位置超时。";
+          break;
+        case error.UNKNOWN_ERROR:
+          document.getElementById('result').innerText = "未知错误发生。";
+          break;
+      }
+    }
+
+    function showTab(tabId) {
+      document.getElementById('checkin').classList.remove('active');
+      document.getElementById('leave').classList.remove('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+  </script>
+</body>
+</html>
